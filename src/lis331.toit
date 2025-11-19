@@ -113,6 +113,9 @@ class Lis331Base:
         --tags={ "expected": expected-who-am-i_, "found": who}
       throw "Device is not expected. Expected 0x$(%02x expected-who-am-i_) got 0x$(%02x who)"
 
+    // Driver Loaded
+    logger_.info "Driver Loaded" --tags={"driver":"$driver-name_"}
+
     // Setting this by default due to the likelihood of error if not set.
     block-data-updates-while-reading
 
@@ -243,17 +246,11 @@ class Lis331Base:
 
   read-g raw/Point3i=read-raw -> Point3f:
     scale := full-scale-table-g-per-lsb[get-fs-selection-raw]
-    return Point3f
-      (raw.x * scale)
-      (raw.y * scale)
-      (raw.z * scale)
+    return Point3f (raw.x * scale) (raw.y * scale) (raw.z * scale)
 
   read-ms2 raw/Point3i=read-raw -> Point3f:
     scale := full-scale-table-g-per-lsb[get-fs-selection-raw]
-    return Point3f
-      (raw.x * scale * G)
-      (raw.y * scale * G)
-      (raw.z * scale * G)
+    return Point3f (raw.x * scale * G) (raw.y * scale * G) (raw.z * scale * G)
 
   magnitude-g raw/Point3i=read-raw -> float:
     scale := full-scale-table-g-per-lsb[get-fs-selection-raw]
@@ -823,19 +820,10 @@ class H3lis331dl extends Lis331Base:
   read-raw -> Point3i:
     x-low := read-register_ REG-OUT-X-L_
     x-hi := read-register_ REG-OUT-X-H_
-
-    print "x high $(bits-grouped_ x-hi) low $(bits-grouped_ x-low)"
-
     y-low := read-register_ REG-OUT-Y-L_
     y-hi := read-register_ REG-OUT-Y-H_
-
-    print "y high $(bits-grouped_ y-hi) low $(bits-grouped_ y-low)"
-
     z-low := read-register_ REG-OUT-Z-L_
     z-hi := read-register_ REG-OUT-Z-H_
-
-    print "z high $(bits-grouped_ z-hi) low $(bits-grouped_ z-low)"
-
     return Point3i
       ((from-i16-be_ x-hi x-low --signed) >> 4)
       ((from-i16-be_ y-hi y-low --signed) >> 4)

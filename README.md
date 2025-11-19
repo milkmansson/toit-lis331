@@ -1,4 +1,4 @@
-# Toit Library for ST LIS331 accelerometer module family
+# Toit Library for ST LIS331 Accelerometer module family
 
 ## About the Device
 ST have a series of devices that are small and low power, with a number of
@@ -27,9 +27,41 @@ By taking a copy of an implemented class, renaming and adjusting the LSB numbers
 etc, it would be possible to add any sibling device with the same register map.
 
 Based on the existing patterns, it seems likely that this package could be used
-for the newer suite/generation of IC's, such as the LIS2* and IIS2* product
+for the newer suite/generation of IC's, such as the `LIS2*` and `IIS2*` product
 ranges.  [Raise an issue](https://github.com/milkmansson/toit-lis331/issues) or
 reach out on [discord](https://chat.toit.io) for help with those.
+
+## Specific Examples
+
+### Reusing a raw read
+The device supports getting raw sensor data, and using it for more than one
+calculation:
+```toit
+// I2C Setup Omitted
+
+// Both of these get a fresh read every time they are called
+read-1 := driver.read-g
+read-2 := driver.read-ms2
+
+// Gets a fresh raw reading every time its called
+raw-3 := read-raw
+
+// Converts the raw read to g, by passing in raw-3
+read-3-g := driver.read-g --raw=raw-3
+
+// Converts the raw read to m/s^2, by passing in raw-3
+read-3-ms2 := driver.read-ms2 --raw=raw-3
+```
+
+### Blocking reads between reading MSB and LSB
+The device has a function `block-data-updates-while-reading` which prevents
+readings from taking place in between an MSB and LSB read.  This driver enables
+this by default.  Disable this using `allow-data-updates-while-reading`.
+
+## To-do:
+- **Implement bias correction:** The device does not have any calibration
+capabilities, so implementing something in the driver could be worthwhile.
+- **Examples:** Provide more examples on interrupts and freefalls.
 
 ## Issues
 If there are any issues, changes, or any other kind of feedback, please
