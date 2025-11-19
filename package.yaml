@@ -1,0 +1,4 @@
+name: lis331
+description: Toit ST LIS331 family accelerometer sensor family driver.
+environment:
+  sdk: ^2.0.0-alpha.188
