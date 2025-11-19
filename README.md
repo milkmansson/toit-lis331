@@ -29,7 +29,7 @@ etc, it would be possible to add any sibling device with the same register map.
 Based on the existing patterns, it seems likely that this package could be used
 for the newer suite/generation of IC's, such as the LIS2* and IIS2* product
 ranges.  [Raise an issue](https://github.com/milkmansson/toit-lis331/issues) or
-get in touch for help with those.
+reach out on [discord](https://chat.toit.io) for help with those.
 
 ## Issues
 If there are any issues, changes, or any other kind of feedback, please
