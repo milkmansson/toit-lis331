@@ -6,6 +6,7 @@ import log
 import binary
 import serial.device as serial
 import serial.registers as registers
+import math show *
 
 /**
 Toit driver library for the LIS331 accelerometer module family.
@@ -94,6 +95,9 @@ class Lis331Base:
   static STATUS-YDA-MASK_   := 0b00000010
   static STATUS-XDA-MASK_   := 0b00000001
 
+  // Constants.
+  static G/float ::= 9.80665
+
   // Private variables.
   reg_/registers.Registers := ?
   logger_/log.Logger := ?
@@ -104,20 +108,29 @@ class Lis331Base:
 
     // Do what is possible to ensure the chosen driver matches the IC present.
     who := read-who-am-i_
-    if who != expected-who-am-i:
-      logger_.error "Device is a $who, expecting a $expected-who-am-i"
-        --tags={ "expected": expected-who-am-i, "found": who}
-      throw "Device is not expected. Expected 0x$(%02x expected-who-am-i) got 0x$(%02x who)"
+    if who != expected-who-am-i_:
+      logger_.error "Device is a $who, expecting a $expected-who-am-i_"
+        --tags={ "expected": expected-who-am-i_, "found": who}
+      throw "Device is not expected. Expected 0x$(%02x expected-who-am-i_) got 0x$(%02x who)"
+
+    // Setting this by default due to the likelihood of error if not set.
+    block-data-updates-while-reading
+
+    // Setting fs range to default (per class).
+    set-fs-selection-raw default-full-scale
 
   // Base versions to ensure a throw if an override not in place
-  expected-who-am-i -> int:
-    throw "expected-who-am-i not implemented"
+  expected-who-am-i_ -> int:
+    throw "expected-who-am-i_ not implemented"
 
-  full-scale-table-mg-per-lsb -> Map:
+  full-scale-table-g-per-lsb -> Map:
     throw "full-scale-table not implemented"
 
   default-full-scale -> int:
     throw "default-full-scale not implemented"
+
+  driver-name_ -> string:
+    throw "driver-name_ not implemented"
 
   /**
   Measurement registers.
@@ -126,7 +139,7 @@ class Lis331Base:
     between reading of high and low registers.  If this is a risk, see
     $Lis331Base.CTRL-4-BDU-MASK_.
   */
-  read-raw -> List:
+  read-raw -> Point3i:
     throw "read-raw not implemented"
 
   configure-defaults_ -> none:
@@ -145,7 +158,7 @@ class Lis331Base:
     high-pass filter is enabled, all three axes are instantaneously set to 0 g.
     This allows the settling time of the high-pass filter to be overcome.
   */
-  high-pass-filter-reset_ -> none:
+  high-pass-filter-reset -> none:
     read-register_ REG-HP-FILT-RST_
 
   /**
@@ -156,7 +169,7 @@ class Lis331Base:
     FDS, HPen2, or HPen1 bits is equal to 1) and the HPM bits are set to 01, a
     filter-out is generated, taking this value as a reference.
   */
-  get-reference-filter-value_ -> int:
+  get-reference-filter-value -> int:
     return read-register_ REG-REFERENCE_
 
   /**
@@ -167,7 +180,7 @@ class Lis331Base:
     FDS, HPen2, or HPen1 bits is equal to 1) and the HPM bits are set to 01, a
     filter-out is generated, taking this value as a reference.
   */
-  set-reference-filter-value_ value/int -> none:
+  set-reference-filter-value value/int -> none:
     assert: 0 <= value <= 255
     write-register_ REG-REFERENCE_ value
 
@@ -180,6 +193,15 @@ class Lis331Base:
   set-power-mode value/int -> none:
     assert: 0 <= value <= 7
     write-register_ REG-CTRL-1_ value  --mask=CTRL-1-PWR-MASK_
+
+  /**
+  Get Power Mode
+
+  Sets the power mode of the module.  The various 'Low Power' modes affect the
+    data rate, as shown in the table in README.md.
+  */
+  get-power-mode -> int:
+    return (read-register_ REG-CTRL-1_ --mask=CTRL-1-PWR-MASK_)
 
   /**
   Set Data Rate and Low Pass frequencies.
@@ -219,21 +241,33 @@ class Lis331Base:
   disable-x-axis -> none:
     write-register_ REG-CTRL-1_ 0 --mask=CTRL-1-X-EN_
 
+  read-g raw/Point3i=read-raw -> Point3f:
+    scale := full-scale-table-g-per-lsb[get-fs-selection-raw]
+    return Point3f
+      (raw.x * scale)
+      (raw.y * scale)
+      (raw.z * scale)
 
-/*
-  read-g -> List:
-    raw-list := read-raw
-    scale := mg-per-lsb_
-    return [raw-list[0] * scale / 1000.0, raw-list[1] * scale / 1000.0, raw-list[2] * scale / 1000.0]
+  read-ms2 raw/Point3i=read-raw -> Point3f:
+    scale := full-scale-table-g-per-lsb[get-fs-selection-raw]
+    return Point3f
+      (raw.x * scale * G)
+      (raw.y * scale * G)
+      (raw.z * scale * G)
 
+  magnitude-g raw/Point3i=read-raw -> float:
+    scale := full-scale-table-g-per-lsb[get-fs-selection-raw]
+    x := raw.x * scale
+    y := raw.y * scale
+    z := raw.z * scale
+    return sqrt (x*x + y*y + z*z)
 
-  mg-per-lsb_ -> float:
-    // look up the scale based on current full-scale bits
-    table := full-scale-table-mg-per-lsb
-    fs-bits := read-current-full-scale-bits_
-    return table[fs-bits]
-*/
-
+  magnitude-ms2 raw/Point3i=read-raw -> float:
+    scale := full-scale-table-g-per-lsb[get-fs-selection-raw]
+    x := raw.x * scale * G
+    y := raw.y * scale * G
+    z := raw.z * scale * G
+    return sqrt (x*x + y*y + z*z)
 
   interrupt-pins-active-low -> none:
     write-register_ REG-CTRL-3_ 1 --mask=CTRL-3-INTRPT-PIN-ACT-LOW-MASK_
@@ -353,7 +387,9 @@ class Lis331Base:
   Values are dependent on the device being used.  See descendant device classes.
   */
   get-fs-selection-raw -> int:
-    return read-register_ REG-CTRL-4_ --mask=CTRL-4-FS-MASK_
+    value := read-register_ REG-CTRL-4_ --mask=CTRL-4-FS-MASK_
+    //logger_.debug "FS Selection" --tags={"fs":"$(%02b value)"}
+    return value
 
   /**
   Configures SPI to 3-wire mode.
@@ -399,6 +435,18 @@ class Lis331Base:
     high := high-byte & 0xFF
     low := low-byte & 0xFF
     value := (high << 8) | low
+    if signed:
+      return (value >= 0x8000) ? (value - 0x10000) : value
+    else:
+      return value
+
+  /**
+  Parse little-endian 16bit from two separate bytes.
+  */
+  from-i16-le_ high-byte/int low-byte/int --signed/bool=false -> int:
+    high := high-byte & 0xFF
+    low := low-byte & 0xFF
+    value := (low << 8) | low
     if signed:
       return (value >= 0x8000) ? (value - 0x10000) : value
     else:
@@ -583,88 +631,24 @@ class Lis331Base:
       value & 0xFF
     ]
 
-  /**
-  Formats a Duration as HH:MM:SS.mmm, or MM:SS.mmm, or SS.mmm
-  */
-  duration-to-string dur/Duration -> string:
-    total-ms := dur.in-ms
-    //print "TOTAL MS: $total-ms"
-    sign := ""
-    if total-ms < 0:
-      sign = "-"
-      total-ms = -total-ms
+/**
+Small class as an integer version of Point3f.
+*/
+class Point3i:
+  x/int? := null
+  y/int? := null
+  z/int? := null
 
-    ms/int := total-ms % 1000
-    total-s := (total-ms / 1000).to-int
-    //print "$(total-s).$(ms)"
+  constructor .x/int? .y/int? .z/int?:
 
-    s/int := total-s % 60
-    total-m/int := total-s / 60
-    //print "$(%02d total-m):$(%02d s).$(ms)"
+  constructor --.x/int? --.y/int? --.z/int?:
 
-    m/int := total-m % 60
-    total-h := total-m / 60
-    //print "$(%02d total-h):$(%02d m):$(%02d s).$(ms)"
-
-    h/int := total-h % 24
-    total-d := total-h / 24
-
-    if total-d > 0:
-      return "$sign $(total-d)d $(%02d h):$(%02d m):$(%02d s).$(%03d ms)"
-    if h > 0:
-      return "$sign$(%02d h):$(%02d m):$(%02d s).$(%03d ms)"
-    else if m > 0:
-      return "$sign$(%02d m):$(%02d s).$(%03d ms)"
-    else:
-      return "$sign$(%01d s).$(%03d ms)"
+  stringify -> string:
+    return "x=$x y=$y z=$z"
 
 
-// H3LIS331DL (high-g, 16 bit)
-class H3Lis331dl extends Lis331Base:
-  // Private variables.
-  reg_/registers.Registers := ?
-  logger_/log.Logger := ?
 
-  static REG-OUT-X-L_     := 0x28 //R
-  static REG-OUT-X-H_     := 0x29 //R
-  static REG-OUT-Y-L_     := 0x2a //R
-  static REG-OUT-Y-H_     := 0x2b //R
-  static REG-OUT-Z-L_     := 0x2c //R
-  static REG-OUT-Z-H_     := 0x2d //R
-
-  // Public constructor that calls the base private one
-  constructor
-      dev/serial.Device
-      --logger/log.Logger = log.default:
-    logger_ = logger.with-name "h3lis331dl"
-    reg_ = dev.registers
-    super.private_ dev --logger=logger_
-
-  expected-who-am-i_ -> int:
-    return 0x32
-
-  full-scale-table-mg-per-lsb -> Map:
-    // fs bits -> mg/LSB
-    return {
-      0b00: 20.0,  // ±100 g
-      0b01: 10.0,  // ±200 g
-      0b11: 5.0,   // ±400 g
-    }
-
-  default-full-scale-setting -> int:
-    return 0b00  // say ±100 g
-
-  read-raw -> List:
-    x-low := read-register_ REG-OUT-X-L_
-    x-hi := read-register_ REG-OUT-X-H_
-    y-low := read-register_ REG-OUT-Y-L_
-    y-hi := read-register_ REG-OUT-Y-H_
-    z-low := read-register_ REG-OUT-Z-L_
-    z-hi := read-register_ REG-OUT-Z-H_
-    return [from-i16-be_ x-hi x-low, from-i16-be_ y-hi y-low, from-i16-be_ z-hi z-low]
-
-
-// LIS331HH (high-g, 16 bit)
+// LIS331HH (high-g, 12 bit)
 class Lis331hh extends Lis331Base:
   // Private variables.
   reg_/registers.Registers := ?
@@ -691,23 +675,25 @@ class Lis331hh extends Lis331Base:
   full-scale-table-mg-per-lsb -> Map:
     // fs bits -> mg/LSB
     return {
-      0b00: 20.0,  // ±100 g
-      0b01: 10.0,  // ±200 g
-      0b11: 5.0,   // ±400 g
+      0b00: 0.003,  // ±6 g
+      0b01: 0.006,  // ±12 g
+      0b11: 0.012,  // ±24 g
     }
 
   default-full-scale-setting -> int:
     return 0b00  // say ±100 g
 
-  read-raw -> List:
+  read-raw -> Point3i:
     x-low := read-register_ REG-OUT-X-L_
     x-hi := read-register_ REG-OUT-X-H_
     y-low := read-register_ REG-OUT-Y-L_
     y-hi := read-register_ REG-OUT-Y-H_
     z-low := read-register_ REG-OUT-Z-L_
     z-hi := read-register_ REG-OUT-Z-H_
-    return [from-i16-be_ x-hi x-low, from-i16-be_ y-hi y-low, from-i16-be_ z-hi z-low]
-
+    return Point3i
+      ((from-i16-be_ x-hi x-low --signed) >> 4)
+      ((from-i16-be_ y-hi y-low --signed) >> 4)
+      ((from-i16-be_ z-hi z-low --signed) >> 4)
 
 
 // LIS331DLH (low-g 12-bit)
@@ -736,50 +722,26 @@ class Lis331dlh extends Lis331Base:
 
   full-scale-table-mg-per-lsb -> Map:
     return {
-      0b00: 1.0,  // ±2 g
-      0b01: 2.0,  // ±4 g
-      0b11: 4.0,  // ±8 g
+      0b00: 0.001,  // ±2 g
+      0b01: 0.002,  // ±4 g
+      0b11: 0.0039,  // ±8 g
     }
 
   default-full-scale-setting -> int:
     return 0b00   // ±2 g
 
-  read-raw -> List:
+  read-raw -> Point3i:
     x-low := read-register_ REG-OUT-X-L_
     x-hi := read-register_ REG-OUT-X-H_
     y-low := read-register_ REG-OUT-Y-L_
     y-hi := read-register_ REG-OUT-Y-H_
     z-low := read-register_ REG-OUT-Z-L_
     z-hi := read-register_ REG-OUT-Z-H_
-    return [from-i16-be_ x-hi x-low, from-i16-be_ y-hi y-low, from-i16-be_ z-hi z-low]
+    return Point3i
+      ((from-i16-be_ x-hi x-low --signed) >> 4)
+      ((from-i16-be_ y-hi y-low --signed) >> 4)
+      ((from-i16-be_ z-hi z-low --signed) >> 4)
 
-
-// LIS331DL (low-g, 8-bit)
-// WARNING: Likely obsolete - old low-g version (±2/8 g) with an old datasheet.
-class Lis331dl extends Lis331Base:
-  // Private variables.
-  reg_/registers.Registers := ?
-  logger_/log.Logger := ?
-
-  constructor
-      dev/serial.Device
-      --logger/log.Logger = log.default:
-    logger_ = logger.with-name "lis331dl"
-    reg_ = dev.registers
-    super.private_ dev --logger=logger_
-
-  expected-who-am-i -> int:
-    return 0x3B
-
-  full-scale-table-mg-per-lsb -> Map:
-    return {
-      0b00: 1.0,  // ±2 g
-      0b01: 2.0,  // ±4 g
-      0b11: 4.0,  // ±8 g
-    }
-
-  default-full-scale-setting -> int:
-    return 0b00   // ±2 g
 
 
 // LIS331DLF (low-g, 8-bit)
@@ -803,18 +765,78 @@ class Lis331dlf extends Lis331Base:
   expected-who-am-i -> int:
     return 0x52
 
-  full-scale-table-mg-per-lsb -> Map:
+  full-scale-table-g-per-lsb -> Map:
     return {
-      0b00: 1.0,  // ±2 g
-      0b01: 2.0,  // ±4 g
-      0b11: 4.0,  // ±8 g
+      0b00: 0.001,  // ±2 g
+      0b01: 0.002,  // ±4 g
+      0b11: 0.004,  // ±8 g
     }
 
   default-full-scale-setting -> int:
     return 0b00   // ±2 g
 
-  read-raw -> List:
-    x := read-register_ REG-OUT-X_
-    y := read-register_ REG-OUT-Y_
-    z := read-register_ REG-OUT-Z_
-    return [x, y, z]
+  read-raw -> Point3i:
+    x := read-register_ REG-OUT-X_ --signed
+    y := read-register_ REG-OUT-Y_ --signed
+    z := read-register_ REG-OUT-Z_ --signed
+    return Point3i x y z
+
+// H3LIS331DL (high-g, 12 bit)
+class H3lis331dl extends Lis331Base:
+  static I2C-ADDRESS     := 0x19 // 0b0011001 - SDO/SA0 pin tied to 3v3 - 0x19
+  static I2C-ADDRESS-ALT := 0x18 // 0b0011000 - SDO/SA0 pin tied to GND - 0x18
+
+  // Private variables.
+  reg_/registers.Registers := ?
+  logger_/log.Logger := ?
+
+  static REG-OUT-X-L_     := 0x28 //R
+  static REG-OUT-X-H_     := 0x29 //R
+  static REG-OUT-Y-L_     := 0x2a //R
+  static REG-OUT-Y-H_     := 0x2b //R
+  static REG-OUT-Z-L_     := 0x2c //R
+  static REG-OUT-Z-H_     := 0x2d //R
+
+  // Public constructor that calls the base private one
+  constructor
+      dev/serial.Device
+      --logger/log.Logger = log.default:
+    logger_ = logger.with-name "h3lis331dl"
+    reg_ = dev.registers
+    super.private_ dev --logger=logger_
+
+  expected-who-am-i_ -> int: return 0x32
+
+  driver-name_ -> string: return "H3Lis331dl"
+
+  full-scale-table-g-per-lsb -> Map:
+    // fs bits -> g/LSB
+    return {
+      0b00: 0.049,  // ±100 g
+      0b01: 0.098,  // ±200 g
+      0b11: 0.195,  // ±400 g
+    }
+
+  default-full-scale -> int:
+    return 0b00     // ±100 g
+
+  read-raw -> Point3i:
+    x-low := read-register_ REG-OUT-X-L_
+    x-hi := read-register_ REG-OUT-X-H_
+
+    print "x high $(bits-grouped_ x-hi) low $(bits-grouped_ x-low)"
+
+    y-low := read-register_ REG-OUT-Y-L_
+    y-hi := read-register_ REG-OUT-Y-H_
+
+    print "y high $(bits-grouped_ y-hi) low $(bits-grouped_ y-low)"
+
+    z-low := read-register_ REG-OUT-Z-L_
+    z-hi := read-register_ REG-OUT-Z-H_
+
+    print "z high $(bits-grouped_ z-hi) low $(bits-grouped_ z-low)"
+
+    return Point3i
+      ((from-i16-be_ x-hi x-low --signed) >> 4)
+      ((from-i16-be_ y-hi y-low --signed) >> 4)
+      ((from-i16-be_ z-hi z-low --signed) >> 4)

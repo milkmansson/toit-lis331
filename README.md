@@ -1,37 +1,35 @@
 # Toit Library for ST LIS331 accelerometer module family
 
-![Front and back of one version of the INA219 module](images/h3lis331dl.jpg)
-
 ## About the Device
+ST have a series of devices that are small and low power, with a number of
+different ranges/sensitivities.  Given they all have roughly the same register
+map/layout, this driver/code has been developed with an H3LIS331DL, but
+designed to work with as many of them as possible.
 
 ## Quick Start Information
+See the examples folder.
 
-## Core features:
+## Model Comparison
+The following models have had code created for them.  Their driver packages are
+extensions of the base class `Lis331Base` which on its own, cannot be used.
+| Part | Bits/Max g | Notes | Driver Class Name | Notes |
+| - | - | - | - | - |
+| H3LIS331DL | 12-bit ±400g | Implemented and Tested | `H3lis331dl` | Device designed to be a crash sensor, so not extremely accurate for fine IMU work. (±1g Accuracy at rest!) |
+| LIS331HH | 12-bit ±24g | Implemented | `Lis331hh` |
+| LIS331DLH | 12-bit ±8g 	| Implemented | `Lis331dlh` |
+| LIS331DL | 8-bit | Not Implemented | - |
+| LIS331DLF | 6-bit ±8g | Implemented | `Lis331dlf` |
 
-### Comparison of Sibling Models
+Data rates for these devices can be configured between 0.5Hz and 1kHz
 
-```
-Part	    Type        WHO_AM_I reg	WHO_AM_I value	Confidence
-H3LIS331DL	high-g +/-400g	 0x0F	        0x32	        solid (docs + examples)
-LIS331HH	high-g +/-24g    0x0F	        0x32	        de facto (libraries)
-LIS331DLH	low-g 12-bit     0x0F	        0x32	        solid (datasheet + Linux)
-LIS331DL	low-g 8-bit      0x0F	        0x3B	        solid (datasheet)
-LIS331DLF	low-g 6-bit      0x0F	        0x52	        solid (datasheet + Linux)
-LIS331DLM	low-g 8-bit      0x0F	      (unsure)	        I don’t have trustworthy values
-```
+### Implementing other models
+By taking a copy of an implemented class, renaming and adjusting the LSB numbers
+etc, it would be possible to add any sibling device with the same register map.
 
-
-# Usage
-
-## Measuring/Operating Modes
-
-### Continuous Mode
-
-### Triggered Mode
-
-### Power-Down
-
-
+Based on the existing patterns, it seems likely that this package could be used
+for the newer suite/generation of IC's, such as the LIS2* and IIS2* product
+ranges.  [Raise an issue](https://github.com/milkmansson/toit-lis331/issues) or
+get in touch for help with those.
 
 ## Issues
 If there are any issues, changes, or any other kind of feedback, please
