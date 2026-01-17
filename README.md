@@ -1,0 +1,90 @@
+# Toit Library for ST LIS331 Accelerometer module family
+
+## About the Device
+ST have a series of devices that are small and low power, with a number of
+different ranges/sensitivities.  Given they all have roughly the same register
+map/layout, this driver/code has been developed with an H3LIS331DL, but
+designed to work with as many of them as possible.
+
+## Quick Start Information
+See the examples folder.
+
+## Model Comparison
+The following models have had code created for them.  Their driver packages are
+extensions of the base class `Lis331Base` which on its own, cannot be used.
+| Part | Bits/Max g | Notes | Driver Class Name | Notes |
+| - | - | - | - | - |
+| H3LIS331DL | 12-bit ±400g | Implemented and Tested | `H3lis331dl` | Device designed to be a crash sensor, so not extremely accurate for fine IMU work. (±1g Accuracy at rest!) |
+| LIS331HH | 12-bit ±24g | Implemented | `Lis331hh` |
+| LIS331DLH | 12-bit ±8g 	| Implemented | `Lis331dlh` |
+| LIS331DL | 8-bit | Not Implemented | - |
+| LIS331DLF | 6-bit ±8g | Implemented | `Lis331dlf` |
+
+Data rates for these devices can be configured between 0.5Hz and 1kHz
+
+### Implementing other models
+By taking a copy of an implemented class, renaming and adjusting the LSB numbers
+etc, it would be possible to add any sibling device with the same register map.
+
+Based on the existing patterns, it seems likely that this package could be used
+for the newer suite/generation of IC's, such as the `LIS2*` and `IIS2*` product
+ranges.  [Raise an issue](https://github.com/milkmansson/toit-lis331/issues) or
+reach out on [discord](https://chat.toit.io) for help with those.
+
+## Specific Examples
+
+### Reusing a raw read
+The device supports getting raw sensor data, and using it for more than one
+calculation:
+```toit
+// I2C Setup Omitted
+
+// Both of these get a fresh read every time they are called
+read-1 := driver.read-g
+read-2 := driver.read-ms2
+
+// Gets a fresh raw reading every time its called
+raw-3 := read-raw
+
+// Converts the raw read to g, by passing in raw-3
+read-3-g := driver.read-g --raw=raw-3
+
+// Converts the raw read to m/s^2, by passing in raw-3
+read-3-ms2 := driver.read-ms2 --raw=raw-3
+```
+
+### Blocking reads between reading MSB and LSB
+The device has a function `block-data-updates-while-reading` which prevents
+readings from taking place in between an MSB and LSB read.  This driver enables
+this by default.  Disable this using `allow-data-updates-while-reading`.
+
+## To-do:
+- **Implement bias correction:** The device does not have any calibration
+capabilities, so implementing something in the driver could be worthwhile.
+- **Examples:** Provide more examples on interrupts and freefalls.
+
+## Issues
+If there are any issues, changes, or any other kind of feedback, please
+[raise an issue](https://github.com/milkmansson/toit-lis331/issues). Feedback is
+welcome and appreciated!
+
+## Disclaimer
+- This driver has been written and tested with the Sparkfun H3LIS331 module.
+- All trademarks belong to their respective owners.
+- No warranties for this work, express or implied.
+
+## Credits
+- [Florian](https://github.com/floitsch) for the tireless help and encouragement
+- The wider Toit developer team (past and present) for a truly excellent product
+- AI has been used for code and text reviews, analysing and compiling data and
+  results, and assisting with ensuring accuracy.
+
+## About Toit
+One would assume you are here because you know what Toit is.  If you dont:
+> Toit is a high-level, memory-safe language, with container/VM technology built
+> specifically for microcontrollers (not a desktop language port). It gives fast
+> iteration (live reloads over Wi-Fi in seconds), robust serviceability, and
+> performance that’s far closer to C than typical scripting options on the
+> ESP32. [[link](https://toitlang.org/)]
+- [Review on Soracom](https://soracom.io/blog/internet-of-microcontrollers-made-easy-with-toit-x-soracom/)
+- [Review on eeJournal](https://www.eejournal.com/article/its-time-to-get-toit)

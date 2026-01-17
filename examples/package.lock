@@ -1,0 +1,5 @@
+prefixes:
+  lis331: ..
+packages:
+  ..:
+    path: ..
