@@ -530,12 +530,12 @@ class Lis331Base:
       ((width == 16) and (mask == 0xFFFF) and (offset == 0)) or
       ((width == 32) and (mask == 0xFFFFFFFF) and (offset == 0)):
       if width == 8:
-        signed ? reg_.write-i8 register (value & 0xFF) : reg_.write-u8 register (value & 0xFF)
+        signed ? reg_.write-i8 register value : reg_.write-u8 register value
       else if width == 16:
-        signed ? reg_.write-i16-be register (value & 0xFFFF) : reg_.write-u16-be register (value & 0xFFFF)
+        signed ? reg_.write-i16-be register value : reg_.write-u16-be register value
       else:
         bit-32-ba = to-bytes32 (value & 0xFFFFFFFF)
-        signed ? reg_.write-i32-be register (value & 0xFFFFFFFF) : reg_.write-bytes register bit-32-ba
+        signed ? reg_.write-i32-be register value: reg_.write-bytes register bit-32-ba
       return
 
     // Read Reg for modification
