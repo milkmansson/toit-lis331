@@ -462,12 +462,12 @@ class Lis331Base:
   /**
   Reads and optionally masks/parses register data
   */
-  read-register_
+  read-register_ -> int
       register/int
       --mask/int?=null
       --offset/int?=null
       --width/int=DEFAULT-REGISTER-WIDTH_
-      --signed/bool=false -> any:
+      --signed/bool=false:
     assert: (width == 8) or (width == 16) or (width == 32)
     if mask == null:
       if      width == 8:  mask = 0xFF
@@ -506,13 +506,13 @@ class Lis331Base:
   /**
   Writes register data (masked or full register writes)
   */
-  write-register_
+  write-register_ -> none
       register/int
-      value/any
+      value/int
       --mask/int?=null
       --offset/int?=null
       --width/int=DEFAULT-REGISTER-WIDTH_
-      --signed/bool=false -> none:
+      --signed/bool=false:
     assert: (width == 8) or (width == 16) or (width == 32)
     if mask == null:
       if      width == 8:  mask = 0xFF
@@ -534,7 +534,7 @@ class Lis331Base:
       else if width == 16:
         signed ? reg_.write-i16-be register value : reg_.write-u16-be register value
       else:
-        bit-32-ba = to-bytes32 (value & 0xFFFFFFFF)
+        bit-32-ba = to-bytes32 value
         signed ? reg_.write-i32-be register value: reg_.write-bytes register bit-32-ba
       return
 
